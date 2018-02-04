@@ -25,6 +25,7 @@ contract Funds {
 
   event InvestingStarted();
   event InvestingFinished();
+  event ReturnsReceived(uint value);
 
   // a função só executa se este contrato estiver no estado `_state`
   modifier onlyDuring(State _state) {
@@ -95,7 +96,11 @@ contract Funds {
   // invocado apenas pela carteira dos operadores para entregar o resultado final
   // só durante Investing
   // NÃO muda o estado para Finished! Assim os operadores podem mandar o dinheiro em múltiplas chamadas
-  function end() public onlyDuring(State.Investing) onlyBy(operatingWallet);
+  function receive() public payable onlyDuring(State.Investing) onlyBy(operatingWallet) {
+    require(this.balance + msg.value > this.balance); // checa overflow
+
+    ReturnsReceived(msg.value);
+  }
 
   // invocado apenas pela carteira dos operadores
   // só durante Investing
