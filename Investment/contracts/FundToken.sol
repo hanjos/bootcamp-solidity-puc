@@ -25,6 +25,8 @@ contract FundToken {
 
     tokenCount += tokens;
     balances[account] += tokens;
+
+    Minted(tokens);
   }
 
   function burn(address account, uint tokens) internal {
@@ -34,7 +36,12 @@ contract FundToken {
 
     tokenCount -= tokens;
     balances[account] -= tokens;
+
+    Burned(tokens);
   }
+
+  event Minted(uint value);
+  event Burned(uint value);
 
   // ==============
   // ERC20 standard
