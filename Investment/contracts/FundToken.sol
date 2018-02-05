@@ -2,22 +2,19 @@ pragma solidity ^0.4.0;
 
 // Implements the ERC20 standard, plus mint and burn functions
 contract FundToken {
-  uint internal tokenCount;
+  uint internal tokenCount = 0;
   mapping(address => uint) internal balances;
-  mapping(address => mapping(address => uint)) allowances;
+  mapping(address => mapping(address => uint)) internal allowances;
 
   string public constant name = "FundToken";
   string public constant symbol = "FUND";
   uint8 public constant decimals = 18;
 
-  function FundToken() public {
-    tokenCount = 0;
-  }
-
   // =============
   // Mint and burn
   // =============
 
+  // Called only by this or derived contracts
   function mint(address account, uint tokens) internal {
     require(tokens > 0);
     require(tokenCount + tokens > tokenCount);
@@ -29,6 +26,7 @@ contract FundToken {
     Minted(tokens);
   }
 
+  // Called only by this or derived contracts
   function burn(address account, uint tokens) internal {
     require(tokens > 0);
     require(tokenCount >= tokens);
