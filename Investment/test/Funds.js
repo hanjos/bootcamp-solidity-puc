@@ -58,4 +58,39 @@ contract('Funds', function (accounts) {
       assert.equal(events[0].args.value, amountToDivest, "Wrong amount emitted!");
     });
   });
+
+  it("setOperatingWallet só pode ser modificado pelo owner", function () {
+    var account0 = accounts[0];
+    var account1 = accounts[1];
+
+    return Funds.deployed().then(async function(meta) {
+      var owner = await meta.getOwner.call();
+
+      // pode ser pedantismo, mas sempre é bom verificar as premissas do teste
+      assert.equal(account0, owner, "Bad test! Check the migrations script");
+      assert.notEqual(account1, owner, "Bad test! Check the migrations script");
+
+      try {
+        await meta.setOperatingWallet(account1, {from: account1});
+        assert.fail("setOperatingWallet should fail when not called by the owner");
+      } catch(error) {
+        // tudo certo; bola pra frente
+      }
+
+      var oldOperatingWallet = await meta.getOperatingWallet.call();
+      var eventWatcher = meta.allEvents();
+
+      await meta.setOperatingWallet(account1, {from: owner});
+
+      var newOperatingWallet = await meta.getOperatingWallet.call();
+      var events = await eventWatcher.get();
+
+      assert.notEqual(newOperatingWallet, oldOperatingWallet, "Operating wallet should've changed");
+      assert.equal(account1, newOperatingWallet, "Operating wallet should now be accounts[1]");
+
+      assert.equal(events.length, 1, "Wrong number of events!");
+      assert.equal(events[0].event, "OperatingWalletChanged", "Wrong event emitted!");
+      assert.equal(events[0].args.wallet, account1, "Wrong address emitted!");
+    });
+  });
 });

@@ -25,6 +25,7 @@ contract Funds is FundToken {
   event InvestingStarted();
   event InvestingFinished();
   event ReturnsReceived(uint value);
+  event OperatingWalletChanged(address wallet);
 
   function Funds() public {
     owner = msg.sender;
@@ -60,6 +61,8 @@ contract Funds is FundToken {
 
   function setOperatingWallet(address wallet) public onlyBy(owner) {
     operatingWallet = wallet;
+
+    OperatingWalletChanged(wallet);
   }
 
   // retorna o total de weis investidos
