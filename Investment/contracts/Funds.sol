@@ -4,44 +4,67 @@ import "./FundToken.sol";
 
 // questões em aberto:
 // * este contrato é que cria a carteira dos operadores?
+// * já viram https://github.com/TokenMarketNet/ico/blob/master/contracts/GnosisWallet.sol ?
 // * operadores
 // * eventos
 // * que poderes o owner teria aqui? Um setState?
+
+/** 
+ * Manages the funds of a group of investors, following a simple workflow.
+ 
+ * This contract emits ERC20 tokens (FUND) for the ethers deposited. These 
+ * FUNDs can be exchanged between the investors or eventually redeemed for the
+ * returns on the investment.
+ */
 contract Funds is FundToken {
-  // há três estados: Open, Investing, Finished
-  // Open é quando os investidores põem o dinheiro a ser investido
-  // Investing é quando os analistas estão operando com o dinheiro do pessoal
-  // Finished é quando as operações acabaram, e o dinheiro está sendo retornado
+  address private owner;
+  address private operatingWallet;
+
+  uint private totalInvested;
+  uint private totalReceived;
+
+  /**
+   * The valid states for this contract, which define what operations are 
+   * valid.
+   * 
+   * * `Open` means that this contract is taking investors.
+   * * `Investing` is when the investors' money is in the operating wallet, 
+   *    and this contract is awaiting the returns.
+   * * `Finished` means that the returns have been paid, and now the investors
+   *    can get their share.
+   */
   enum State { Open, Investing, Finished }
 
-  State private state; // o estado atual do fundo
+  State private state;
 
-  address private owner; // o administrador de tudo
-  address private operatingWallet; // a carteira dos operadores
-
-  uint private totalInvested; // o total investido em wei
-  uint private totalReceived; // o total recebido de volta em wei
-
+  /** Fired when the state changes from Open to Investing. */
   event InvestingStarted();
-  event InvestingFinished();
-  event ReturnsReceived(uint value);
-  event OperatingWalletChanged(address wallet);
 
+  /** Fired when the state changes from Investing to Finished. */
+  event InvestingFinished();
+
+  /** Fired when the operating wallet deposits `value` weis back. */
+  event ReturnsReceived(uint value);
+
+  /** Fired when the operating wallet changes. */
+  event OperatingWalletChanged(address oldWallet, address newWallet);
+
+  /** Creates this contract, with `msg.sender` as the `owner`. */
   function Funds() public {
     owner = msg.sender;
   }
 
   /*
-   * Modificadores
+   * Modifiers
    */
 
-  // a função só executa se este contrato estiver no estado `_state`
+  /** Checks if this contract is in state `_state`. */
   modifier onlyDuring(State _state) {
     require(state == _state);
     _;
   }
 
-  // a função só executa se for chamada por `_address`
+  /** Checks if the function is being called by `_address`. */
   modifier onlyBy(address _address) {
     require(msg.sender == _address);
     _;
@@ -51,55 +74,95 @@ contract Funds is FundToken {
    * gerenciamento de estado
    */
 
+  /** Returns this contract's owner. */
   function getOwner() public view returns (address) {
     return owner;
   }
 
+  /** Returns the current operating wallet. */
   function getOperatingWallet() public view returns (address) {
     return operatingWallet;
   }
 
-  function setOperatingWallet(address wallet) public onlyBy(owner) {
+  /**
+   * Changes the operating wallet. 
+   * Can be called only by the owner, and only during State.Open.
+   * 
+   * @param wallet The new wallet.
+   */
+  function setOperatingWallet(address wallet) public onlyBy(owner) onlyDuring(State.Open) {
+    address old = operatingWallet;
     operatingWallet = wallet;
 
-    OperatingWalletChanged(wallet);
+    OperatingWalletChanged(old, wallet);
   }
 
-  // retorna o total de weis investidos
+  /** Returns the current state. */
+  function getState() public view returns (State) {
+    return state;
+  }
+
+  /**
+   * The total amount invested in this contract, in weis. This value should 
+   * be set in stone after State.Open.
+   * 
+   * This value is useful because the contract's balance and totalSupply() 
+   * can change after State.Open, and that would distort the ROI calculation.
+   */
   function getTotalInvested() public view returns (uint) {
     if (state == State.Open) {
-      return this.balance;
+      return totalSupply();
     } else {
       return totalInvested;
     }
   }
 
-  // retorna o total de weis que o investimento rendeu. 
-  // Só será diferente de zero se estivermos no estado Finished
+  /** 
+   * The total amount returned after the investment, in weis. 
+   */
   function getTotalReceived() public view returns (uint) {
     return totalReceived;
   }
 
   /*
-   * Funções OPEN
+   * OPEN operations
    */
 
-  // registra quem mandou o dinheiro e quanto
+  /** 
+   * Stores and registers the amount paid by `msg.sender`, who gets in
+   * return a number of FUND tokens equal to the amount paid.
+   * 
+   * After State.Open, this contract is closed for further investments, 
+   * although FUND owners can still exchange FUND tokens afterwards :)
+   */
   function invest() public payable onlyDuring(State.Open) {
     mint(msg.sender, msg.value);
   }
 
-  // resgata `value` de quem pedir
+  /** 
+   * Exchanges `value` FUND tokens from `msg.sender` (which are destroyed) 
+   * for `value` weis.
+   * 
+   * This function works only during State.Open, and `msg.sender` cannot redeem
+   * more tokens than they actually own.
+   * 
+   * @param value The amount of FUND tokens to exchange.
+   */
   function divest(uint value) public onlyDuring(State.Open) {
     burn(msg.sender, value);
 
     msg.sender.transfer(value);
   }
 
-  // transfere todos os ethers deste contrato para a carteira dos operadores
-  // XXX quem pode chamar?
-  // muda o estado para Investing
+  /** 
+   * Transfers all the ethers in this contract to the operating wallet, which
+   * kicks off the State.Investing state. Works only during State.Open.
+   * 
+   * Fires InvestingStarted.
+   */
   function start() public onlyDuring(State.Open) {
+    require(operatingWallet > 0); // precisa ser definido antes do investimento começar
+    
     totalInvested = this.balance; // guarda quanto tinha, para calcular a proporção de cada um depois
 
     operatingWallet.transfer(totalInvested); // que comecem os jogos!
@@ -109,19 +172,29 @@ contract Funds is FundToken {
   }
 
   /*
-   * Funções INVESTING
+   * INVESTING operations
    */
 
-  // invocado apenas pela carteira dos operadores para entregar o resultado final
-  // NÃO muda o estado para Finished! Assim os operadores podem mandar o dinheiro em múltiplas chamadas
+  /**
+   * Stores any early returns from the investments. 
+   * 
+   * Can be called only by the operating wallet, and only during 
+   * State.Investing.
+   * Fires ReturnsReceived.
+   */
   function receive() public payable onlyDuring(State.Investing) onlyBy(operatingWallet) {
     require(this.balance + msg.value > this.balance); // checa overflow
 
     ReturnsReceived(msg.value);
   }
 
-  // invocado apenas pela carteira dos operadores
-  // SÓ muda o estado para Finished
+  /**
+   * Ends State.Investing, and transitions to State.Finished. 
+   * 
+   * Can be called only by the operating wallet, and only during 
+   * State.Investing.
+   * Fires InvestingFinished.
+   */
   function finish() public onlyDuring(State.Investing) onlyBy(operatingWallet) {
     totalReceived = this.balance; // guarda quanto recebeu para calcular a proporção de cada um depois
 
@@ -130,10 +203,16 @@ contract Funds is FundToken {
   }
 
   /*
-   * Funções FINISHED
+   * FINISHED operations
    */
 
-  // paga a parte do resultado a quem o chamar
+  /**
+   * Exchanges all `msg.sender`'s FUND tokens for their returns on the 
+   * investment.
+   * 
+   * Can be called only during State.Finished. Errors if `msg.sender` has no 
+   * FUNDs to exchange.
+   */
   function withdraw() public onlyDuring(State.Finished) {
     require(balances[msg.sender] > 0); // gaiatos não recebem nada
 
