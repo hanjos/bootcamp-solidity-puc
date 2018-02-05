@@ -1,13 +1,14 @@
 pragma solidity ^0.4.0;
 
+import "./FundToken.sol";
+
 // questões em aberto:
 // * este contrato é que cria a carteira dos operadores?
 // * operadores
 // * eventos
 // * testes!
-// * não creio que tenhamos tempo hábil, mas emitir tokens a serem redimidos depois pode ser interessante :)
 // * que poderes o owner teria aqui? Um setState?
-contract Funds {
+contract Funds is FundToken {
   // há três estados: Open, Investing, Finished
   // Open é quando os investidores põem o dinheiro a ser investido
   // Investing é quando os analistas estão operando com o dinheiro do pessoal
@@ -21,7 +22,6 @@ contract Funds {
 
   uint totalInvested; // o total investido em wei
   uint totalReceived; // o total recebido de volta em wei
-  mapping(address => uint) balances; // o total investido em wei por endereço
 
   event InvestingStarted();
   event InvestingFinished();
@@ -37,11 +37,6 @@ contract Funds {
   modifier onlyBy(address _address) {
     require(operatingWallet == _address);
     _;
-  }
-
-  // retorna quanto dinheiro `_address` colocou
-  function balanceOf(address _address) public view returns (uint) {
-    return balances[_address];
   }
 
   // retorna o total de weis investidos
@@ -62,20 +57,14 @@ contract Funds {
   // registra quem mandou o dinheiro e quanto
   // só durante Open
   function invest() public payable onlyDuring(State.Open) {
-    require(msg.value > 0); // rejeita depósitos sem dinheiro
-    require(balances[msg.sender] + msg.value > balances[msg.sender]); // checa overflow
-
-    balances[msg.sender] += msg.value;
+    mint(msg.sender, msg.value);
   }
 
   // resgata `value` de quem pedir
   // só durante Open
   // só até o total que aquela pessoa tiver
   function divest(uint value) public onlyDuring(State.Open) {
-    require(value > 0); // rejeita resgates de nada
-    require(balances[msg.sender] >= value); // rejeita resgates acima do valor depositado
-
-    balances[msg.sender] -= value;
+    burn(msg.sender, value);
 
     msg.sender.transfer(value);
   }
@@ -116,9 +105,10 @@ contract Funds {
   // só durante Finished
   function withdraw() public onlyDuring(State.Finished) {
     require(balances[msg.sender] > 0); // gaiatos não recebem nada
-    
-    uint result = balances[msg.sender] * (totalReceived / totalInvested);
-    balances[msg.sender] = 0;
+
+    uint result = balances[msg.sender] * (totalReceived / totalInvested); // o quanto o investimento rendeu
+    burn(msg.sender, balances[msg.sender]); // os tokens não existirão mais
+
     msg.sender.transfer(result);
   }
 }
