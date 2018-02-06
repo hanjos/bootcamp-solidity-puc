@@ -11,7 +11,7 @@ import "./FundToken.sol";
 
 /** 
  * Manages the funds of a group of investors, following a simple workflow.
- 
+ * 
  * This contract emits ERC20 tokens (FUND) for the ethers deposited. These 
  * FUNDs can be exchanged between the investors or eventually redeemed for the
  * returns on the investment.
@@ -19,6 +19,7 @@ import "./FundToken.sol";
 contract Funds is FundToken {
   address private owner;
   address private operatingWallet;
+  uint private investingDate;
 
   uint private totalInvested;
   uint private totalReceived;
@@ -46,8 +47,9 @@ contract Funds is FundToken {
   event OperatingWalletChanged(address oldWallet, address newWallet);
 
   /** Creates this contract, with `msg.sender` as the `owner`. */
-  function Funds() public {
+  function Funds(uint openDurationInDays) public {
     owner = msg.sender;
+    investingDate = now + (openDurationInDays * 1 days);
   }
 
   /*
@@ -66,6 +68,12 @@ contract Funds is FundToken {
     _;
   }
 
+  /** Verifies if the function is called after `date`. */
+  modifier onlyAfter(uint date) {
+    require(now >= date);
+    _;
+  }
+
   /*
    * Properties
    */
@@ -73,6 +81,11 @@ contract Funds is FundToken {
   /** Returns this contract's owner. */
   function getOwner() public view returns (address) {
     return owner;
+  }
+
+  /** Returns when `State.Investing` is available. */
+  function getInvestingDate() public view returns (uint) {
+    return investingDate;
   }
 
   /**
@@ -88,9 +101,7 @@ contract Funds is FundToken {
    * 
    * @param wallet The new wallet.
    */
-  function setOperatingWallet(address wallet)
-      public
-      onlyBy(owner) {
+  function setOperatingWallet(address wallet) public onlyBy(owner) {
     address old = operatingWallet;
     operatingWallet = wallet;
 
@@ -166,9 +177,10 @@ contract Funds is FundToken {
    * Transfers all the ethers in this contract to the operating wallet, and
    * changes the state to `State.Investing`.
    *
-   * Works only during `State.Open`. Fires `StateChanged`.
+   * Works only during `State.Open` and after `investingDate`. Fires 
+   * `StateChanged`.
    */
-  function start() public onlyDuring(State.Open) {
+  function start() public onlyDuring(State.Open) onlyAfter(investingDate) {
     require(operatingWallet > 0); // operatingWallet must be set by now
     
     totalInvested = this.balance;
@@ -192,7 +204,8 @@ contract Funds is FundToken {
       public
       payable
       onlyDuring(State.Investing)
-      onlyBy(operatingWallet) {
+      onlyBy(operatingWallet) 
+  {
     require(this.balance + msg.value > this.balance); // overflow
 
     ReturnsReceived(msg.value);
@@ -207,7 +220,8 @@ contract Funds is FundToken {
   function finish()
       public
       onlyDuring(State.Investing)
-      onlyBy(operatingWallet) {
+      onlyBy(operatingWallet) 
+  {
     totalReceived = this.balance;
 
     setState(State.Finished);
@@ -223,9 +237,7 @@ contract Funds is FundToken {
    * Can be called only during `State.Finished`. Errors if `msg.sender` has no
    * FUNDs to exchange.
    */
-  function withdraw()
-      public
-      onlyDuring(State.Finished) {
+  function withdraw() public onlyDuring(State.Finished) {
     require(balances[msg.sender] > 0);
 
     uint result = balances[msg.sender] * (totalReceived / totalInvested);

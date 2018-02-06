@@ -85,8 +85,7 @@ contract FundToken {
   // The transferFrom method is used for a withdraw workflow, allowing contracts to send
   // tokens on your behalf, for example to "deposit" to a contract address and/or to charge
   // fees in sub-currencies; the command should fail unless the _from account has
-  // deliberately authorized the sender of the message via some mechanism; we propose
-  // these standardized APIs for approval:
+  // deliberately authorized the sender of the message via some mechanism
   function transferFrom(address from, address to, uint tokens) public returns (bool) {
     require(balances[from] >= tokens);
     require(allowances[from][to] >= tokens);
