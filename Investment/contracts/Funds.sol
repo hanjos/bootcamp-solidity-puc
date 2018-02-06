@@ -24,8 +24,7 @@ contract Funds is FundToken {
   uint private totalReceived;
 
   /**
-   * The valid states for this contract, which define what operations are 
-   * valid.
+   * The states of this contract. Each enables a certain set of operations
    * 
    * * `Open` means that this contract is taking investors.
    * * `Investing` is when the investors' money is in the operating wallet, 
@@ -37,11 +36,8 @@ contract Funds is FundToken {
 
   State private state;
 
-  /** Fired when the state changes from Open to Investing. */
-  event InvestingStarted();
-
-  /** Fired when the state changes from Investing to Finished. */
-  event InvestingFinished();
+  /** Fired when the state changes from `from` to `to`. */
+  event StateChanged(State from, State to);
 
   /** Fired when the operating wallet deposits `value` weis back. */
   event ReturnsReceived(uint value);
@@ -71,7 +67,7 @@ contract Funds is FundToken {
   }
 
   /*
-   * gerenciamento de estado
+   * Properties
    */
 
   /** Returns this contract's owner. */
@@ -79,18 +75,22 @@ contract Funds is FundToken {
     return owner;
   }
 
-  /** Returns the current operating wallet. */
+  /**
+   * Returns the current operating wallet, which is where the funds will be
+   * sent and where the returns will come from.
+   */
   function getOperatingWallet() public view returns (address) {
     return operatingWallet;
   }
 
   /**
-   * Changes the operating wallet. 
-   * Can be called only by the owner, and only during State.Open.
+   * Changes the operating wallet. Can be called only by the owner.
    * 
    * @param wallet The new wallet.
    */
-  function setOperatingWallet(address wallet) public onlyBy(owner) onlyDuring(State.Open) {
+  function setOperatingWallet(address wallet)
+      public
+      onlyBy(owner) {
     address old = operatingWallet;
     operatingWallet = wallet;
 
@@ -102,12 +102,20 @@ contract Funds is FundToken {
     return state;
   }
 
+  /** Changes the current state to `to`, and fires `StateChanged`. */
+  function setState(State to) internal {
+    State from = state;
+
+    state = to;
+    StateChanged(from, to);
+  }
+
   /**
    * The total amount invested in this contract, in weis. This value should 
    * be set in stone after State.Open.
    * 
-   * This value is useful because the contract's balance and totalSupply() 
-   * can change after State.Open, and that would distort the ROI calculation.
+   * This value is useful because the contract's balance and `totalSupply()`
+   * can change after `State.Open`, which would distort the ROI.
    */
   function getTotalInvested() public view returns (uint) {
     if (state == State.Open) {
@@ -132,7 +140,7 @@ contract Funds is FundToken {
    * Stores and registers the amount paid by `msg.sender`, who gets in
    * return a number of FUND tokens equal to the amount paid.
    * 
-   * After State.Open, this contract is closed for further investments, 
+   * After `State.Open`, this contract is closed for further investments,
    * although FUND owners can still exchange FUND tokens afterwards :)
    */
   function invest() public payable onlyDuring(State.Open) {
@@ -140,11 +148,11 @@ contract Funds is FundToken {
   }
 
   /** 
-   * Exchanges `value` FUND tokens from `msg.sender` (which are destroyed) 
-   * for `value` weis.
+   * Exchanges `value` FUND tokens (which are subsequently destroyed) from
+   * `msg.sender` for `value` weis.
    * 
-   * This function works only during State.Open, and `msg.sender` cannot redeem
-   * more tokens than they actually own.
+   * This function works only during `State.Open`, and `msg.sender` can't
+   * return more tokens than they actually own.
    * 
    * @param value The amount of FUND tokens to exchange.
    */
@@ -155,20 +163,19 @@ contract Funds is FundToken {
   }
 
   /** 
-   * Transfers all the ethers in this contract to the operating wallet, which
-   * kicks off the State.Investing state. Works only during State.Open.
-   * 
-   * Fires InvestingStarted.
+   * Transfers all the ethers in this contract to the operating wallet, and
+   * changes the state to `State.Investing`.
+   *
+   * Works only during `State.Open`. Fires `StateChanged`.
    */
   function start() public onlyDuring(State.Open) {
-    require(operatingWallet > 0); // precisa ser definido antes do investimento começar
+    require(operatingWallet > 0); // operatingWallet must be set by now
     
-    totalInvested = this.balance; // guarda quanto tinha, para calcular a proporção de cada um depois
+    totalInvested = this.balance;
 
-    operatingWallet.transfer(totalInvested); // que comecem os jogos!
+    operatingWallet.transfer(totalInvested);
 
-    state = State.Investing;
-    InvestingStarted(); // notificando interessados de que o investimento começou
+    setState(State.Investing);
   }
 
   /*
@@ -179,27 +186,31 @@ contract Funds is FundToken {
    * Stores any early returns from the investments. 
    * 
    * Can be called only by the operating wallet, and only during 
-   * State.Investing.
-   * Fires ReturnsReceived.
+   * `State.Investing`. Fires `ReturnsReceived`.
    */
-  function receive() public payable onlyDuring(State.Investing) onlyBy(operatingWallet) {
-    require(this.balance + msg.value > this.balance); // checa overflow
+  function receive()
+      public
+      payable
+      onlyDuring(State.Investing)
+      onlyBy(operatingWallet) {
+    require(this.balance + msg.value > this.balance); // overflow
 
     ReturnsReceived(msg.value);
   }
 
   /**
-   * Ends State.Investing, and transitions to State.Finished. 
+   * Ends `State.Investing`, and transitions to `State.Finished`.
    * 
    * Can be called only by the operating wallet, and only during 
-   * State.Investing.
-   * Fires InvestingFinished.
+   * `State.Investing`. Fires `StateChanged`.
    */
-  function finish() public onlyDuring(State.Investing) onlyBy(operatingWallet) {
-    totalReceived = this.balance; // guarda quanto recebeu para calcular a proporção de cada um depois
+  function finish()
+      public
+      onlyDuring(State.Investing)
+      onlyBy(operatingWallet) {
+    totalReceived = this.balance;
 
-    state = State.Finished;
-    InvestingFinished();
+    setState(State.Finished);
   }
 
   /*
@@ -207,17 +218,18 @@ contract Funds is FundToken {
    */
 
   /**
-   * Exchanges all `msg.sender`'s FUND tokens for their returns on the 
-   * investment.
+   * Exchanges all `msg.sender`'s FUND tokens for their returns.
    * 
-   * Can be called only during State.Finished. Errors if `msg.sender` has no 
+   * Can be called only during `State.Finished`. Errors if `msg.sender` has no
    * FUNDs to exchange.
    */
-  function withdraw() public onlyDuring(State.Finished) {
-    require(balances[msg.sender] > 0); // gaiatos não recebem nada
+  function withdraw()
+      public
+      onlyDuring(State.Finished) {
+    require(balances[msg.sender] > 0);
 
-    uint result = balances[msg.sender] * (totalReceived / totalInvested); // o quanto o investimento rendeu
-    burn(msg.sender, balances[msg.sender]); // os tokens não existirão mais
+    uint result = balances[msg.sender] * (totalReceived / totalInvested);
+    burn(msg.sender, balances[msg.sender]);
 
     msg.sender.transfer(result);
   }
