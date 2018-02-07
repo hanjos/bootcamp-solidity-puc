@@ -23,7 +23,7 @@ contract('Funds', function (accounts) {
       assert.equal(endingTokenSupply, startingTokenSupply + amount, "The right number of tokens wasn't minted");
 
       assert.equal(events.length, 1, "Wrong number of events!");
-      assert.equal(events[0].event, "Minted", "Wrong event emitted!");
+      assert.equal(events[0].event, "Mint", "Wrong event emitted!");
       assert.equal(events[0].args.value, amount, "Wrong amount emitted!");
     });
   });
@@ -43,7 +43,7 @@ contract('Funds', function (accounts) {
       var eventWatcher = meta.allEvents();
 
       await meta.divest(amountToDivest, {from: account1});
-      
+
       var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
       var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
       var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
@@ -54,7 +54,7 @@ contract('Funds', function (accounts) {
       assert.equal(endingTokenSupply, startingTokenSupply - amountToDivest, "The right number of tokens wasn't minted");
 
       assert.equal(events.length, 1, "Wrong number of events!");
-      assert.equal(events[0].event, "Burned", "Wrong event emitted!");
+      assert.equal(events[0].event, "Burn", "Wrong event emitted!");
       assert.equal(events[0].args.value, amountToDivest, "Wrong amount emitted!");
     });
   });
