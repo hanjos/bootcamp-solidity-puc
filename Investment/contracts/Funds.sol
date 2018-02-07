@@ -240,7 +240,7 @@ contract Funds is FundToken {
   function withdraw() public onlyDuring(State.Finished) {
     require(balances[msg.sender] > 0);
 
-    uint result = balances[msg.sender] * (totalReceived / totalInvested);
+    uint result = (balances[msg.sender] * totalReceived) / totalInvested;
     burn(msg.sender, balances[msg.sender]);
 
     msg.sender.transfer(result);
