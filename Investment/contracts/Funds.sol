@@ -24,6 +24,8 @@ contract Funds is FundToken {
   uint private totalInvested;
   uint private totalReceived;
 
+  uint private minimumInvestment;
+
   /**
    * The states of this contract. Each enables a certain set of operations
    * 
@@ -47,8 +49,9 @@ contract Funds is FundToken {
   event OperatingWalletChanged(address oldWallet, address newWallet);
 
   /** Creates this contract, with `msg.sender` as the `owner`. */
-  function Funds(uint openDurationInDays) public {
+  function Funds(uint _minimumInvestment, uint openDurationInDays) public {
     owner = msg.sender;
+    minimumInvestment = _minimumInvestment;
     investingDate = now + (openDurationInDays * 1 days);
   }
 
@@ -121,6 +124,10 @@ contract Funds is FundToken {
     StateChanged(from, to);
   }
 
+  function getMinimumInvestment() public view returns (uint) {
+    return minimumInvestment;
+  }
+
   /**
    * The total amount invested in this contract, in weis. This value should 
    * be set in stone after State.Open.
@@ -155,6 +162,8 @@ contract Funds is FundToken {
    * although FUND owners can still exchange FUND tokens afterwards :)
    */
   function invest() public payable onlyDuring(State.Open) {
+    require(balances[msg.sender] + msg.value >= minimumInvestment);
+
     mint(msg.sender, msg.value);
   }
 
@@ -168,6 +177,8 @@ contract Funds is FundToken {
    * @param value The amount of FUND tokens to exchange.
    */
   function divest(uint value) public onlyDuring(State.Open) {
+    require(balances[msg.sender] == value || balances[msg.sender] - value >= minimumInvestment);
+
     burn(msg.sender, value);
 
     msg.sender.transfer(value);
