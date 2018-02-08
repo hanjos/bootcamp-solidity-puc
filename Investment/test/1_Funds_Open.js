@@ -1,6 +1,6 @@
 var Funds = artifacts.require("./Funds.sol");
 
-contract('Funds', function (accounts) {
+contract('Funds: Open phase', function (accounts) {
   const owner = accounts[0];
   const openDurationInDays = 30;
   const minimumInvestment = Math.pow(10, 18);
@@ -55,7 +55,9 @@ contract('Funds', function (accounts) {
       await meta.invest({from: account1, value: amount});
       assert.fail("Shouldn't have accepted the investment!");
     } catch (e) {
-      assert.ok(e);
+      if(e.name === "AssertionError") {
+        throw e;
+      }
     }
 
     var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
@@ -114,7 +116,9 @@ contract('Funds', function (accounts) {
       await meta.divest(amountToDivest, {from: account1});
       assert.fail("Shouldn't have gotten here!");
     } catch(e) {
-      assert.ok(e);
+      if(e.name === "AssertionError") {
+        throw e;
+      }
     }
 
     var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
@@ -140,12 +144,7 @@ contract('Funds', function (accounts) {
     var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
     var eventWatcher = meta.allEvents(); // ignoring the Mint event earlier
 
-    try {
-      await meta.divest(startingAmount, {from: account1});
-      assert.fail("Shouldn't have gotten here!");
-    } catch(e) {
-      assert.ok(e);
-    }
+    await meta.divest(startingAmount, {from: account1});
 
     var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
     var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
@@ -178,7 +177,9 @@ contract('Funds', function (accounts) {
       await meta.setOperatingWallet(account1, {from: account1});
       assert.fail("setOperatingWallet should fail when not called by the owner");
     } catch(e) {
-      assert.ok(e);
+      if(e.name === "AssertionError") {
+        throw e;
+      }
     }
 
     var newOperatingWallet = await meta.getOperatingWallet.call();
@@ -238,7 +239,9 @@ contract('Funds', function (accounts) {
       await meta.start();
       assert.fail("Should never get here!");
     } catch(e) {
-      assert.ok(e);
+      if(e.name === "AssertionError") {
+        throw e;
+      }
     }
 
     var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
@@ -268,7 +271,9 @@ contract('Funds', function (accounts) {
       await meta.start();
       assert.fail("Should never get here!");
     } catch(e) {
-      assert.ok(e);
+      if(e.name === "AssertionError") {
+        throw e;
+      }
     }
 
     var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
