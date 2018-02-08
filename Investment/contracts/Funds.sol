@@ -53,6 +53,8 @@ contract Funds is FundToken {
     owner = msg.sender;
     minimumInvestment = _minimumInvestment;
     investingDate = now + (openDurationInDays * 1 days);
+
+    state = State.Open;
   }
 
   /*
@@ -193,6 +195,7 @@ contract Funds is FundToken {
    */
   function start() public onlyDuring(State.Open) onlyAfter(investingDate) {
     require(operatingWallet > 0); // operatingWallet must be set by now
+    require(this.balance >= minimumInvestment); // no point in investing nothing
     
     totalInvested = this.balance;
 

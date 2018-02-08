@@ -7,8 +7,14 @@ contract('Funds', function (accounts) {
 
   var meta;
 
+  // XXX since the ABI doesn't store enum values (as per https://solidity.readthedocs.io/en/latest/frequently-asked-questions.html#if-i-return-an-enum-i-only-get-integer-values-in-web3-js-how-to-get-the-named-values),
+  // here we go
+  const STATE_OPEN = 0;
+  const STATE_INVESTING = 1;
+  const STATE_FINISHED = 2;
+
   beforeEach(async function () {
-    meta = await Funds.new(minimumInvestment, 30, {from: owner});
+    meta = await Funds.new(minimumInvestment, openDurationInDays, {from: owner});
   });
 
   it("should invest correctly", async function() {
@@ -124,36 +130,36 @@ contract('Funds', function (accounts) {
   });
 
   it("divesting everything at once is allowed", async function() {
-      const startingAmount = minimumInvestment;
-      const account1 = accounts[1];
+    const startingAmount = minimumInvestment;
+    const account1 = accounts[1];
 
-      await meta.invest({from: account1, value: startingAmount});
+    await meta.invest({from: account1, value: startingAmount});
 
-      var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-      var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-      var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
-      var eventWatcher = meta.allEvents(); // ignoring the Mint event earlier
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
+    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var eventWatcher = meta.allEvents(); // ignoring the Mint event earlier
 
-      try {
-        await meta.divest(startingAmount, {from: account1});
-        assert.fail("Shouldn't have gotten here!");
-      } catch(e) {
-        assert.ok(e);
-      }
+    try {
+      await meta.divest(startingAmount, {from: account1});
+      assert.fail("Shouldn't have gotten here!");
+    } catch(e) {
+      assert.ok(e);
+    }
 
-      var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-      var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-      var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
-      var events = await eventWatcher.get();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
+    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var events = await eventWatcher.get();
 
-      assert.equal(metaEndingBalance, 0, "No tokens should've remained!");
-      assert.equal(account1EndingBalance, 0, "Everything should've been divested from accounts[1]");
-      assert.equal(endingTokenSupply, 0, "All tokens should've been burned");
+    assert.equal(metaEndingBalance, 0, "No tokens should've remained!");
+    assert.equal(account1EndingBalance, 0, "Everything should've been divested from accounts[1]");
+    assert.equal(endingTokenSupply, 0, "All tokens should've been burned");
 
-      assert.equal(events.length, 1, "Wrong number of events");
-      assert.equal(events[0].event, "Burn", "Wrong event emitted");
-      assert.equal(events[0].args.value, startingAmount, "Wrong amount emitted");
-    });
+    assert.equal(events.length, 1, "Wrong number of events");
+    assert.equal(events[0].event, "Burn", "Wrong event emitted");
+    assert.equal(events[0].args.value, startingAmount, "Wrong amount emitted");
+  });
 
   it("non-owners can't change the operating wallet", async function () {
     var account0 = accounts[0];
@@ -184,29 +190,130 @@ contract('Funds', function (accounts) {
   });
 
   it("only the owner can change the operating wallet", async function () {
-      var account0 = accounts[0];
-      var account1 = accounts[1];
+    var account0 = accounts[0];
+    var account1 = accounts[1];
 
-      var owner = await meta.getOwner.call();
+    var owner = await meta.getOwner.call();
 
-      // pode ser pedantismo, mas sempre é bom verificar as premissas do teste
-      assert.equal(account0, owner, "Bad test! Check the migrations script");
-      assert.notEqual(account1, account0, "accounts[0] and [1] should be different");
+    // pode ser pedantismo, mas sempre é bom verificar as premissas do teste
+    assert.equal(account0, owner, "Bad test! Check the migrations script");
+    assert.notEqual(account1, account0, "accounts[0] and [1] should be different");
 
-      var oldOperatingWallet = await meta.getOperatingWallet.call();
-      var eventWatcher = meta.allEvents();
+    var oldOperatingWallet = await meta.getOperatingWallet.call();
+    var eventWatcher = meta.allEvents();
 
-      await meta.setOperatingWallet(account1, {from: owner});
+    await meta.setOperatingWallet(account1, {from: owner});
 
-      var newOperatingWallet = await meta.getOperatingWallet.call();
-      var events = await eventWatcher.get();
+    var newOperatingWallet = await meta.getOperatingWallet.call();
+    var events = await eventWatcher.get();
 
-      assert.notEqual(newOperatingWallet, oldOperatingWallet, "Operating wallet should've changed");
-      assert.equal(account1, newOperatingWallet, "Operating wallet should now be accounts[1]");
+    assert.notEqual(newOperatingWallet, oldOperatingWallet, "Operating wallet should've changed");
+    assert.equal(account1, newOperatingWallet, "Operating wallet should now be accounts[1]");
 
-      assert.equal(events.length, 1, "Wrong number of events!");
-      assert.equal(events[0].event, "OperatingWalletChanged", "Wrong event emitted!");
-      assert.equal(events[0].args.oldWallet, 0, "Wrong old wallet!");
-      assert.equal(events[0].args.newWallet, account1, "Wrong new wallet!");
-    });
+    assert.equal(events.length, 1, "Wrong number of events");
+    assert.equal(events[0].event, "OperatingWalletChanged", "Wrong event emitted");
+    assert.equal(events[0].args.oldWallet, 0, "Wrong old wallet");
+    assert.equal(events[0].args.newWallet, account1, "Wrong new wallet");
+  });
+
+  it("can't start the investment phase without a wallet set", async function () {
+    // we can invest right now!
+    var meta = await Funds.new(minimumInvestment, 0, {from: owner});
+
+    var wallet = await meta.getOperatingWallet.call();
+
+    assert.equal(0, wallet, "The wallet should begin unset!");
+
+    var startingState = (await meta.getState.call()).toNumber();
+    assert.equal(startingState, STATE_OPEN, "The initial state should be Open");
+
+    // for the contract to start with some funds
+    var account1 = accounts[1];
+    await meta.invest({from: account1, value: minimumInvestment});
+
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var eventWatcher = meta.allEvents();
+
+    try {
+      await meta.start();
+      assert.fail("Should never get here!");
+    } catch(e) {
+      assert.ok(e);
+    }
+
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var endingState = (await meta.getState.call()).toNumber();
+    var events = await eventWatcher.get();
+
+    assert.equal(endingState, startingState, "The state shouldn't have changed");
+    assert.equal(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
+
+    assert.equal(events.length, 0, "Wrong number of events");
+  });
+
+  it("can't start the investment phase ahead of time", async function () {
+    // operating wallet set
+    var account1 = accounts[1];
+    await meta.setOperatingWallet(account1);
+
+    // for the contract to start with some funds
+    var account2 = accounts[2];
+    await meta.invest({from: account2, value: minimumInvestment});
+
+    var startingState = (await meta.getState.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var eventWatcher = meta.allEvents();
+
+    try {
+      await meta.start();
+      assert.fail("Should never get here!");
+    } catch(e) {
+      assert.ok(e);
+    }
+
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var endingState = (await meta.getState.call()).toNumber();
+    var events = await eventWatcher.get();
+
+    assert.equal(endingState, startingState, "The state shouldn't have changed");
+    assert.equal(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
+
+    assert.equal(events.length, 0, "Wrong number of events");
+  });
+
+  it("anybody can kick off the investment phase when preconditions are right", async function () {
+    // we can invest right now!
+    var meta = await Funds.new(minimumInvestment, 0, {from: owner});
+
+    // operating wallet set
+    var operatingWallet = accounts[1];
+    await meta.setOperatingWallet(operatingWallet);
+
+    // for the contract to start with some funds
+    var account2 = accounts[2];
+    await meta.invest({from: account2, value: minimumInvestment});
+
+    var startingState = (await meta.getState.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var operatingWalletStartingBalance = await web3.eth.getBalance(operatingWallet).toNumber();
+    var eventWatcher = meta.allEvents();
+
+    await meta.start();
+
+    var endingState = (await meta.getState.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var operatingWalletEndingBalance = await web3.eth.getBalance(operatingWallet).toNumber();
+    var events = await eventWatcher.get();
+
+    assert.equal(startingState, STATE_OPEN);
+    assert.equal(endingState, STATE_INVESTING);
+
+    assert.equal(metaEndingBalance, metaStartingBalance - minimumInvestment, "Money should've been transferred");
+    assert.equal(operatingWalletEndingBalance, operatingWalletStartingBalance + minimumInvestment, "Should've been paid");
+
+    assert.equal(events.length, 1, "Wrong number of events");
+    assert.equal(events[0].event, "StateChanged", "Wrong event");
+    assert.equal(events[0].args.from, STATE_OPEN, "Wrong old state");
+    assert.equal(events[0].args.to, STATE_INVESTING, "Wrong new state");
+  });
 });
