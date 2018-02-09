@@ -1,5 +1,9 @@
 var Funds = artifacts.require("./Funds.sol");
 
+function closeEnough(a, b, errorMargin) {
+  return Math.abs(a - b) <= Math.abs(errorMargin);
+}
+
 contract('Funds: Investing phase', function (accounts) {
   const owner = accounts[0];
   const investor1 = accounts[1];
@@ -8,8 +12,11 @@ contract('Funds: Investing phase', function (accounts) {
 
   const minimumInvestment = Math.pow(10, 18);
 
+  // TODO no idea why, but transfer costs seem to be consistently this * gasUsed
+  const actualGasPrice = Math.pow(10, 11);
+  const errorMargin = 1;
+
   var meta;
-  var startingWalletBalance;
 
   // XXX since the ABI doesn't store enum values (as per https://solidity.readthedocs.io/en/latest/frequently-asked-questions.html#if-i-return-an-enum-i-only-get-integer-values-in-web3-js-how-to-get-the-named-values),
   // here we go
@@ -17,9 +24,14 @@ contract('Funds: Investing phase', function (accounts) {
   const STATE_INVESTING = 1;
   const STATE_FINISHED = 2;
 
+  async function calculateLatestGasCost() {
+    var gasUsed = await web3.eth.getBlock('latest').gasUsed;
+
+    return gasUsed * actualGasPrice;
+  }
+
   beforeEach(async function () {
     meta = await Funds.new(minimumInvestment, 0, {from: owner});
-    startingWalletBalance = await web3.eth.getBalance(wallet);
 
     await meta.setOperatingWallet(wallet);
     await meta.invest({ from: investor1, value: minimumInvestment });
@@ -64,15 +76,36 @@ contract('Funds: Investing phase', function (accounts) {
       }
     }
 
+    var gasCost = await calculateLatestGasCost();
     var ownerEndingBalance = await web3.eth.getBalance(owner).toNumber();
     var metaEndingBalance = await web3.eth.getBalance(meta.contract.address).toNumber();
     var events = await eventWatcher.get();
 
-    // XXX owner will lose some money to gas costs, even if the transaction doesn't go through
-    //     but the gas is a lot less than the actual investment made
-    assert.ok(ownerEndingBalance + minimumInvestment > ownerStartingBalance, "Shouldn't have paid");
+    assert.ok(closeEnough(ownerEndingBalance, ownerStartingBalance, gasCost), "Shouldn't have paid");
     assert.equal(metaEndingBalance, metaStartingBalance, "Shouldn't have received");
 
     assert.equal(events.length, 0, "Wrong number of events");
+  });
+
+  it("only the wallet can put money back in", async function () {
+    var walletStartingBalance = await web3.eth.getBalance(wallet).toNumber();
+    var metaStartingBalance = await web3.eth.getBalance(meta.contract.address).toNumber();
+    var eventWatcher = meta.allEvents();
+
+    var amount = minimumInvestment; // no minimum investment
+
+    await meta.receive({from: wallet, value: amount });
+
+    var gasCost = await calculateLatestGasCost();
+    var walletEndingBalance = await web3.eth.getBalance(wallet).toNumber();
+    var metaEndingBalance = await web3.eth.getBalance(meta.contract.address).toNumber();
+    var events = await eventWatcher.get();
+
+    assert.ok(closeEnough(walletEndingBalance, walletStartingBalance - amount, gasCost), "Should've paid");
+    assert.equal(metaEndingBalance, metaStartingBalance + amount, "Should've received");
+
+    assert.equal(events.length, 1, "Wrong number of events");
+    assert.equal(events[0].event, "ReturnsReceived", "Wrong event");
+    assert.equal(events[0].args.value, amount, "Wrong value transferred");
   });
 });
