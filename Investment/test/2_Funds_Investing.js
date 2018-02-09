@@ -26,9 +26,20 @@ contract('Funds: Investing phase', function (accounts) {
     await meta.start();
   });
 
-  it("can't call invest and divest during Investing", async function () {
+  it("can't call invest during Investing", async function () {
     try {
       await meta.invest({ from: investor1, value: minimumInvestment + 1000 });
+      assert.fail("Should've failed earlier");
+    } catch(e) {
+      if(e.name === "AssertionError") {
+        throw e;
+      }
+    }
+  });
+
+  it("can't call divest during Investing", async function () {
+    try {
+      await meta.divest({ from: investor2, value: minimumInvestment });
       assert.fail("Should've failed earlier");
     } catch(e) {
       if(e.name === "AssertionError") {
