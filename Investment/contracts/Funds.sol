@@ -170,11 +170,10 @@ contract Funds is FundToken {
   }
 
   /** 
-   * Exchanges `value` FUND tokens (which are subsequently destroyed) from
+   * Exchanges `value` FUND tokens (which are subsequently burned) from
    * `msg.sender` for `value` weis.
    * 
-   * This function works only during `State.Open`, and `msg.sender` can't
-   * return more tokens than they actually own.
+   * `msg.sender` can't return more tokens than they actually own.
    * 
    * @param value The amount of FUND tokens to exchange.
    */
@@ -190,10 +189,13 @@ contract Funds is FundToken {
    * Transfers all the ethers in this contract to the operating wallet, and
    * changes the state to `State.Investing`.
    *
-   * Works only during `State.Open` and after `investingDate`. Fires 
-   * `StateChanged`.
+   * Fires `StateChanged`.
    */
-  function start() public onlyDuring(State.Open) onlyAfter(investingDate) {
+  function start()
+      public
+      onlyDuring(State.Open)
+      onlyAfter(investingDate)
+  {
     require(operatingWallet > 0); // operatingWallet must be set by now
     require(this.balance >= minimumInvestment); // no point in investing nothing
     
@@ -211,8 +213,7 @@ contract Funds is FundToken {
   /**
    * Stores any early returns from the investments. 
    * 
-   * Can be called only by the operating wallet, and only during 
-   * `State.Investing`. Fires `ReturnsReceived`.
+   * Fires `ReturnsReceived`.
    */
   function receive()
       public
@@ -226,10 +227,10 @@ contract Funds is FundToken {
   }
 
   /**
-   * Ends `State.Investing`, and transitions to `State.Finished`.
-   * 
-   * Can be called only by the operating wallet, and only during 
-   * `State.Investing`. Fires `StateChanged`.
+   * Ends `State.Investing`, and transitions to `State.Finished`. After calling
+   * this function, no more funds can be `receive`d.
+   *
+   * Fires `StateChanged`.
    */
   function finish()
       public
@@ -248,8 +249,7 @@ contract Funds is FundToken {
   /**
    * Exchanges all `msg.sender`'s FUND tokens for their returns.
    * 
-   * Can be called only during `State.Finished`. Errors if `msg.sender` has no
-   * FUNDs to exchange.
+   * Errors if `msg.sender` has no FUNDs to exchange.
    */
   function withdraw() public onlyDuring(State.Finished) {
     require(balances[msg.sender] > 0);
@@ -258,5 +258,24 @@ contract Funds is FundToken {
     burn(msg.sender, balances[msg.sender]);
 
     msg.sender.transfer(result);
+  }
+
+  /**
+   * Sends the last weis in this contract to the owner. These weis come from
+   * the imprecision in the ROI integer division, and would be otherwise stuck
+   * in this contract.
+   *
+   * Can be called only after all FUNDs have been redeemed.
+   */
+  function drain()
+      public
+      onlyDuring(State.Finished)
+      onlyBy(owner)
+  {
+    require(totalSupply() == 0);
+
+    uint debris = this.balance;
+
+    owner.transfer(debris);
   }
 }
