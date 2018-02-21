@@ -1,5 +1,12 @@
 var Funds = artifacts.require("./Funds.sol");
 
+assert.bigNumberEqual = function (actual, expected, message) {
+  if(! actual.eq(expected)) {
+    message = (message != undefined) ? message + ": " : "";
+    throw new AssertionError(message + "expected " + actual.toString() + " to equal " + expected.toString());
+  }
+}
+
 contract('Funds: Open phase', function (accounts) {
   const owner = accounts[0];
   const openDurationInDays = 30;
@@ -21,21 +28,21 @@ contract('Funds: Open phase', function (accounts) {
     var account1 = accounts[1];
     var amount = minimumInvestment;
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1StartingBalance = (await meta.balanceOf.call(account1));
+    var startingTokenSupply = (await meta.totalSupply.call());
     var eventWatcher = meta.allEvents();
 
     await meta.invest({from: account1, value: amount});
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1EndingBalance = (await meta.balanceOf.call(account1));
+    var endingTokenSupply = (await meta.totalSupply.call());
     var events = await eventWatcher.get();
 
-    assert.equal(metaEndingBalance, metaStartingBalance + amount, "Amount wasn't stored in the contract");
-    assert.equal(account1EndingBalance, account1StartingBalance + amount, "Amount wasn't marked as invested by account1");
-    assert.equal(endingTokenSupply, startingTokenSupply + amount, "The right number of tokens wasn't minted");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance.plus(amount), "Amount wasn't stored in the contract");
+    assert.bigNumberEqual(account1EndingBalance, account1StartingBalance.plus(amount), "Amount wasn't marked as invested by account1");
+    assert.bigNumberEqual(endingTokenSupply, startingTokenSupply.plus(amount), "The right number of tokens wasn't minted");
 
     assert.equal(events.length, 1, "Wrong number of events!");
     assert.equal(events[0].event, "Mint", "Wrong event emitted!");
@@ -44,11 +51,11 @@ contract('Funds: Open phase', function (accounts) {
 
   it("one should invest a minimum amount", async function() {
     var account1 = accounts[1];
-    var amount = 1000; // too small a value, and JavaScript might not notice the difference
+    var amount = 1000;
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1StartingBalance = (await meta.balanceOf.call(account1));
+    var startingTokenSupply = (await meta.totalSupply.call());
     var eventWatcher = meta.allEvents();
 
     try {
@@ -60,40 +67,40 @@ contract('Funds: Open phase', function (accounts) {
       }
     }
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1EndingBalance = (await meta.balanceOf.call(account1));
+    var endingTokenSupply = (await meta.totalSupply.call());
     var events = await eventWatcher.get();
 
-    assert.equal(metaEndingBalance, metaStartingBalance, "Amount shouldn't have been stored in the contract");
-    assert.equal(account1EndingBalance, account1StartingBalance, "Amount shouldn't have been invested by account1");
-    assert.equal(endingTokenSupply, startingTokenSupply, "No token should have been minted");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance, "Amount shouldn't have been stored in the contract");
+    assert.bigNumberEqual(account1EndingBalance, account1StartingBalance, "Amount shouldn't have been invested by account1");
+    assert.bigNumberEqual(endingTokenSupply, startingTokenSupply, "No token should have been minted");
 
     assert.equal(events.length, 0, "No event should have been emitted!");
   });
 
   it("should divest correctly", async function() {
     const startingAmount = minimumInvestment + 1000;
-    const amountToDivest = 500; // too small a value, and JavaScript might not notice the difference
+    const amountToDivest = 500;
     const account1 = accounts[1];
 
     await meta.invest({from: account1, value: startingAmount});
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1StartingBalance = (await meta.balanceOf.call(account1));
+    var startingTokenSupply = (await meta.totalSupply.call());
     var eventWatcher = meta.allEvents();
 
     await meta.divest(amountToDivest, {from: account1});
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1EndingBalance = (await meta.balanceOf.call(account1));
+    var endingTokenSupply = (await meta.totalSupply.call());
     var events = await eventWatcher.get();
 
-    assert.equal(metaEndingBalance, metaStartingBalance - amountToDivest, "Amount wasn't correctly stored in the contract");
-    assert.equal(account1EndingBalance, account1StartingBalance - amountToDivest, "Amount wasn't correctly marked as divested by accounts[1]");
-    assert.equal(endingTokenSupply, startingTokenSupply - amountToDivest, "The right number of tokens wasn't burned");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance.minus(amountToDivest), "Amount wasn't correctly stored in the contract");
+    assert.bigNumberEqual(account1EndingBalance, account1StartingBalance.minus(amountToDivest), "Amount wasn't correctly marked as divested by accounts[1]");
+    assert.bigNumberEqual(endingTokenSupply, startingTokenSupply.minus(amountToDivest), "The right number of tokens wasn't burned");
 
     assert.equal(events.length, 1, "Wrong number of events");
     assert.equal(events[0].event, "Burn", "Wrong event emitted");
@@ -102,14 +109,14 @@ contract('Funds: Open phase', function (accounts) {
 
   it("should divest only enough to keep the minimum", async function() {
     const startingAmount = minimumInvestment;
-    const amountToDivest = 1000; // too small a value, and JavaScript might not notice the difference
+    const amountToDivest = 1000;
     const account1 = accounts[1];
 
     await meta.invest({from: account1, value: startingAmount});
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1StartingBalance = (await meta.balanceOf.call(account1));
+    var startingTokenSupply = (await meta.totalSupply.call());
     var eventWatcher = meta.allEvents(); // ignoring the Mint event earlier
 
     try {
@@ -121,14 +128,14 @@ contract('Funds: Open phase', function (accounts) {
       }
     }
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1EndingBalance = (await meta.balanceOf.call(account1));
+    var endingTokenSupply = (await meta.totalSupply.call());
     var events = await eventWatcher.get();
 
-    assert.equal(metaEndingBalance, metaStartingBalance, "Nothing should've been removed!");
-    assert.equal(account1EndingBalance, account1StartingBalance, "Nothing should've been divested from accounts[1]");
-    assert.equal(endingTokenSupply, startingTokenSupply, "No tokens should've been burned");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance, "Nothing should've been removed!");
+    assert.bigNumberEqual(account1EndingBalance, account1StartingBalance, "Nothing should've been divested from accounts[1]");
+    assert.bigNumberEqual(endingTokenSupply, startingTokenSupply, "No tokens should've been burned");
 
     assert.equal(events.length, 0, "Wrong number of events");
   });
@@ -139,21 +146,21 @@ contract('Funds: Open phase', function (accounts) {
 
     await meta.invest({from: account1, value: startingAmount});
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1StartingBalance = (await meta.balanceOf.call(account1));
+    var startingTokenSupply = (await meta.totalSupply.call());
     var eventWatcher = meta.allEvents(); // ignoring the Mint event earlier
 
     await meta.divest(startingAmount, {from: account1});
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
-    var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var account1EndingBalance = (await meta.balanceOf.call(account1));
+    var endingTokenSupply = (await meta.totalSupply.call());
     var events = await eventWatcher.get();
 
-    assert.equal(metaEndingBalance, 0, "No tokens should've remained!");
-    assert.equal(account1EndingBalance, 0, "Everything should've been divested from accounts[1]");
-    assert.equal(endingTokenSupply, 0, "All tokens should've been burned");
+    assert.bigNumberEqual(metaEndingBalance, 0, "No tokens should've remained!");
+    assert.bigNumberEqual(account1EndingBalance, 0, "Everything should've been divested from accounts[1]");
+    assert.bigNumberEqual(endingTokenSupply, 0, "All tokens should've been burned");
 
     assert.equal(events.length, 1, "Wrong number of events");
     assert.equal(events[0].event, "Burn", "Wrong event emitted");
@@ -166,7 +173,7 @@ contract('Funds: Open phase', function (accounts) {
 
     var owner = await meta.getOwner.call();
 
-    // pode ser pedantismo, mas sempre é bom verificar as premissas do teste
+    // it's always good to check the test's premises
     assert.equal(account0, owner, "Bad test! Check the migrations script");
     assert.notEqual(account1, account0, "accounts[0] and [1] should be different");
 
@@ -196,7 +203,7 @@ contract('Funds: Open phase', function (accounts) {
 
     var owner = await meta.getOwner.call();
 
-    // pode ser pedantismo, mas sempre é bom verificar as premissas do teste
+    // it's always good to check the test's premises
     assert.equal(account0, owner, "Bad test! Check the migrations script");
     assert.notEqual(account1, account0, "accounts[0] and [1] should be different");
 
@@ -232,7 +239,7 @@ contract('Funds: Open phase', function (accounts) {
     var account1 = accounts[1];
     await meta.invest({from: account1, value: minimumInvestment});
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
     var eventWatcher = meta.allEvents();
 
     try {
@@ -244,12 +251,12 @@ contract('Funds: Open phase', function (accounts) {
       }
     }
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
     var endingState = (await meta.getState.call()).toNumber();
     var events = await eventWatcher.get();
 
     assert.equal(endingState, startingState, "The state shouldn't have changed");
-    assert.equal(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
 
     assert.equal(events.length, 0, "Wrong number of events");
   });
@@ -264,7 +271,7 @@ contract('Funds: Open phase', function (accounts) {
     await meta.invest({from: account2, value: minimumInvestment});
 
     var startingState = (await meta.getState.call()).toNumber();
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
     var eventWatcher = meta.allEvents();
 
     try {
@@ -276,12 +283,12 @@ contract('Funds: Open phase', function (accounts) {
       }
     }
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
     var endingState = (await meta.getState.call()).toNumber();
     var events = await eventWatcher.get();
 
     assert.equal(endingState, startingState, "The state shouldn't have changed");
-    assert.equal(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance, "No money should've come out of the contract");
 
     assert.equal(events.length, 0, "Wrong number of events");
   });
@@ -299,22 +306,22 @@ contract('Funds: Open phase', function (accounts) {
     await meta.invest({from: account2, value: minimumInvestment});
 
     var startingState = (await meta.getState.call()).toNumber();
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var operatingWalletStartingBalance = await web3.eth.getBalance(operatingWallet).toNumber();
+    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var operatingWalletStartingBalance = await web3.eth.getBalance(operatingWallet);
     var eventWatcher = meta.allEvents();
 
     await meta.start();
 
     var endingState = (await meta.getState.call()).toNumber();
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
-    var operatingWalletEndingBalance = await web3.eth.getBalance(operatingWallet).toNumber();
+    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address);
+    var operatingWalletEndingBalance = await web3.eth.getBalance(operatingWallet);
     var events = await eventWatcher.get();
 
     assert.equal(startingState, STATE_OPEN);
     assert.equal(endingState, STATE_INVESTING);
 
-    assert.equal(metaEndingBalance, metaStartingBalance - minimumInvestment, "Money should've been transferred");
-    assert.equal(operatingWalletEndingBalance, operatingWalletStartingBalance + minimumInvestment, "Should've been paid");
+    assert.bigNumberEqual(metaEndingBalance, metaStartingBalance.minus(minimumInvestment), "Money should've been transferred");
+    assert.bigNumberEqual(operatingWalletEndingBalance, operatingWalletStartingBalance.plus(minimumInvestment), "Should've been paid");
 
     assert.equal(events.length, 1, "Wrong number of events");
     assert.equal(events[0].event, "StateChanged", "Wrong event");
