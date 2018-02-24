@@ -21,14 +21,14 @@ contract('Funds: Open phase', function (accounts) {
     var account1 = accounts[1];
     var amount = minimumInvestment;
 
-    var metaStartingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaStartingBalance = await web3.eth.getBalance(meta.contract.address).toNumber();
     var account1StartingBalance = (await meta.balanceOf.call(account1)).toNumber();
     var startingTokenSupply = (await meta.totalSupply.call()).toNumber();
     var eventWatcher = meta.allEvents();
 
     await meta.invest({from: account1, value: amount});
 
-    var metaEndingBalance = await meta.contract._eth.getBalance(meta.contract.address).toNumber();
+    var metaEndingBalance = await web3.eth.getBalance(meta.contract.address).toNumber();
     var account1EndingBalance = (await meta.balanceOf.call(account1)).toNumber();
     var endingTokenSupply = (await meta.totalSupply.call()).toNumber();
     var events = await eventWatcher.get();
